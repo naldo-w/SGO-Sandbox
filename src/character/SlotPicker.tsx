@@ -2,24 +2,16 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { Assets } from "pixi.js";
 import { assetLoader } from "../assets/AssetLoader";
 import type { AssetEntry } from "../assets/contract";
-import type { EquipSlot, AssetReference } from "./types";
 import { usePaperdollStore } from "./paperdollStore";
-import { EQUIP_TO_RENDER } from "./types";
-
-const SLOT_LABELS: Record<EquipSlot, string> = {
-  body: "Body",
-  face: "Face",
-  hair: "Hair",
-  armor: "Armor",
-  weapon: "Weapon",
-  accessory: "Accessory",
-};
+import { getLayerById } from "../data/layers/defaultLayers";
+import type { LayerDefinition } from "../data/layers/LayerDefinition";
 
 interface SlotPickerProps {
-  slot: EquipSlot;
+  layerId: string;
+  layerDef: LayerDefinition;
 }
 
-export function SlotPicker({ slot }: SlotPickerProps) {
+export function SlotPicker({ layerId, layerDef }: SlotPickerProps) {
   const config = usePaperdollStore((s) => s.config);
   const setLayer = usePaperdollStore((s) => s.setLayer);
   const clearLayer = usePaperdollStore((s) => s.clearLayer);
@@ -32,9 +24,8 @@ export function SlotPicker({ slot }: SlotPickerProps) {
   const [thumbUrls, setThumbUrls] = useState<Map<string, string>>(new Map());
   const thumbLoading = useRef<Set<string>>(new Set());
 
-  const currentRef = config.layers[slot];
-  const renderTargets = EQUIP_TO_RENDER[slot];
-  const layerState = layerStates[slot];
+  const currentAsset = config.equipment[layerId];
+  const layerState = layerStates[layerId] ?? { visible: true, alpha: 1 };
 
   useEffect(() => {
     const idx = assetLoader.getIndex();
@@ -74,28 +65,29 @@ export function SlotPicker({ slot }: SlotPickerProps) {
   }
 
   function handleSelect(entry: AssetEntry) {
-    const ref: AssetReference = { assetId: entry.path };
-    setLayer(slot, ref);
+    setLayer(layerId, entry.path);
   }
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span>{SLOT_LABELS[slot]}</span>
-        <span style={styles.targets}>→ {renderTargets.join(", ")}</span>
-        {currentRef && (
-          <button style={styles.clearBtn} onClick={() => clearLayer(slot)}>
+        <span>{layerDef.name}</span>
+        <span style={styles.targets}>
+          z:{layerDef.zIndex} → {layerDef.partSlots.join(", ")}
+        </span>
+        {currentAsset && (
+          <button style={styles.clearBtn} onClick={() => clearLayer(layerId)}>
             ✕
           </button>
         )}
       </div>
 
-      {currentRef && (
+      {currentAsset && (
         <div style={styles.currentRow}>
           <div style={styles.currentThumb}>
-            {thumbUrls.has(currentRef.assetId) ? (
+            {thumbUrls.has(currentAsset) ? (
               <img
-                src={thumbUrls.get(currentRef.assetId)}
+                src={thumbUrls.get(currentAsset)}
                 style={{ width: 32, height: 32, objectFit: "contain" }}
               />
             ) : (
@@ -103,10 +95,7 @@ export function SlotPicker({ slot }: SlotPickerProps) {
             )}
           </div>
           <div style={styles.currentInfo}>
-            <div style={styles.currentId}>{currentRef.assetId}</div>
-            <div style={styles.currentMeta}>
-              {thumbUrls.has(currentRef.assetId) ? "✓ loaded" : "loading..."}
-            </div>
+            <div style={styles.currentId}>{currentAsset}</div>
           </div>
         </div>
       )}
@@ -116,7 +105,7 @@ export function SlotPicker({ slot }: SlotPickerProps) {
           <input
             type="checkbox"
             checked={layerState.visible}
-            onChange={(e) => setLayerVisibility(slot, e.target.checked)}
+            onChange={(e) => setLayerVisibility(layerId, e.target.checked)}
           />
           Show
         </label>
@@ -126,7 +115,7 @@ export function SlotPicker({ slot }: SlotPickerProps) {
           max={1}
           step={0.05}
           value={layerState.alpha}
-          onChange={(e) => setLayerAlpha(slot, parseFloat(e.target.value))}
+          onChange={(e) => setLayerAlpha(layerId, parseFloat(e.target.value))}
           style={styles.alphaSlider}
         />
       </div>
@@ -134,7 +123,7 @@ export function SlotPicker({ slot }: SlotPickerProps) {
       <input
         style={styles.input}
         type="text"
-        placeholder={`Filter ${SLOT_LABELS[slot].toLowerCase()}...`}
+        placeholder={`Filter ${layerDef.name.toLowerCase()}...`}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
@@ -145,7 +134,7 @@ export function SlotPicker({ slot }: SlotPickerProps) {
             key={a.id}
             style={{
               ...styles.item,
-              ...(currentRef?.assetId === a.path ? styles.itemActive : {}),
+              ...(currentAsset === a.path ? styles.itemActive : {}),
             }}
             onClick={() => handleSelect(a)}
           >
@@ -175,162 +164,43 @@ export function SlotPicker({ slot }: SlotPickerProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    borderBottom: "1px solid var(--border)",
-    padding: "8px",
-  },
+  container: { borderBottom: "1px solid var(--border)", padding: "8px" },
   header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    fontSize: "12px",
-    fontWeight: 600,
-    color: "var(--text-bright)",
-    marginBottom: "4px",
+    display: "flex", alignItems: "center", gap: "6px",
+    fontSize: "12px", fontWeight: 600, color: "var(--text-bright)", marginBottom: "4px",
   },
-  targets: {
-    fontSize: "10px",
-    color: "var(--text-dim)",
-    fontWeight: 400,
-  },
+  targets: { fontSize: "10px", color: "var(--text-dim)", fontWeight: 400 },
   clearBtn: {
-    marginLeft: "auto",
-    width: "20px",
-    height: "20px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "1px solid var(--border)",
-    borderRadius: "4px",
-    background: "transparent",
-    color: "var(--danger)",
-    cursor: "pointer",
-    fontSize: "10px",
+    marginLeft: "auto", width: "20px", height: "20px",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    border: "1px solid var(--border)", borderRadius: "4px",
+    background: "transparent", color: "var(--danger)",
+    cursor: "pointer", fontSize: "10px",
   },
   currentRow: {
-    display: "flex",
-    gap: "8px",
-    marginBottom: "4px",
-    padding: "4px",
-    background: "var(--bg)",
-    borderRadius: "4px",
+    display: "flex", gap: "8px", marginBottom: "4px",
+    padding: "4px", background: "var(--bg)", borderRadius: "4px",
   },
-  currentThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: "3px",
-    overflow: "hidden",
-    flexShrink: 0,
-    background: "var(--bg-panel)",
-  },
-  thumbPlaceholder: {
-    width: 32,
-    height: 32,
-    background: "var(--bg-panel)",
-    borderRadius: "3px",
-  },
-  thumbPlaceholderSm: {
-    width: 24,
-    height: 24,
-    background: "var(--bg-panel)",
-    borderRadius: "2px",
-  },
-  currentInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  currentId: {
-    fontSize: "11px",
-    color: "var(--accent)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  currentMeta: {
-    fontSize: "10px",
-    color: "var(--text-dim)",
-  },
-  layerCtrls: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "4px",
-    fontSize: "11px",
-  },
-  layerLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    cursor: "pointer",
-    color: "var(--text-dim)",
-  },
-  alphaSlider: {
-    flex: 1,
-    height: "3px",
-    cursor: "pointer",
-    accentColor: "var(--accent)",
-  },
+  currentThumb: { width: 32, height: 32, borderRadius: "3px", overflow: "hidden", flexShrink: 0, background: "var(--bg-panel)" },
+  thumbPlaceholder: { width: 32, height: 32, background: "var(--bg-panel)", borderRadius: "3px" },
+  thumbPlaceholderSm: { width: 24, height: 24, background: "var(--bg-panel)", borderRadius: "2px" },
+  currentInfo: { flex: 1, minWidth: 0 },
+  currentId: { fontSize: "11px", color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  layerCtrls: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", fontSize: "11px" },
+  layerLabel: { display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "var(--text-dim)" },
+  alphaSlider: { flex: 1, height: "3px", cursor: "pointer", accentColor: "var(--accent)" },
   input: {
-    width: "100%",
-    padding: "4px 8px",
-    borderRadius: "4px",
-    border: "1px solid var(--border)",
-    background: "var(--bg)",
-    color: "var(--text-bright)",
-    fontSize: "11px",
-    outline: "none",
-    marginBottom: "4px",
+    width: "100%", padding: "4px 8px", borderRadius: "4px",
+    border: "1px solid var(--border)", background: "var(--bg)",
+    color: "var(--text-bright)", fontSize: "11px", outline: "none", marginBottom: "4px",
   },
-  list: {
-    maxHeight: "100px",
-    overflowY: "auto",
-  },
-  item: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "3px 6px",
-    cursor: "pointer",
-    borderRadius: "3px",
-    fontSize: "11px",
-  },
-  itemActive: {
-    background: "var(--bg-hover)",
-  },
-  itemThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: "2px",
-    overflow: "hidden",
-    flexShrink: 0,
-  },
-  itemInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  itemId: {
-    color: "var(--text)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  itemPath: {
-    fontSize: "10px",
-    color: "var(--text-dim)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  animBadge: {
-    fontSize: "9px",
-    color: "var(--success)",
-    fontWeight: 700,
-    flexShrink: 0,
-  },
-  empty: {
-    padding: "8px",
-    textAlign: "center",
-    color: "var(--text-dim)",
-    fontSize: "11px",
-  },
+  list: { maxHeight: "100px", overflowY: "auto" },
+  item: { display: "flex", alignItems: "center", gap: "6px", padding: "3px 6px", cursor: "pointer", borderRadius: "3px", fontSize: "11px" },
+  itemActive: { background: "var(--bg-hover)" },
+  itemThumb: { width: 24, height: 24, borderRadius: "2px", overflow: "hidden", flexShrink: 0 },
+  itemInfo: { flex: 1, minWidth: 0 },
+  itemId: { color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  itemPath: { fontSize: "10px", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  animBadge: { fontSize: "9px", color: "var(--success)", fontWeight: 700, flexShrink: 0 },
+  empty: { padding: "8px", textAlign: "center", color: "var(--text-dim)", fontSize: "11px" },
 };

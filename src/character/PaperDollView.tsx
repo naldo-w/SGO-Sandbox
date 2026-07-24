@@ -3,7 +3,7 @@ import { Application, Assets, Text, TextStyle } from "pixi.js";
 import { PaperDoll } from "./PaperDoll";
 import { CharacterAnimator } from "./CharacterAnimator";
 import { usePaperdollStore } from "./paperdollStore";
-import { EQUIP_SLOTS, EQUIP_TO_RENDER } from "./types";
+import { DEFAULT_LAYERS } from "../data/layers/defaultLayers";
 import type { CharacterConfig, LayerState } from "./types";
 
 export function PaperDollView() {
@@ -39,7 +39,7 @@ export function PaperDollView() {
         if (destroyed || !canvasRef.current) return;
         canvasRef.current.appendChild(app.canvas as HTMLCanvasElement);
 
-        const pd = new PaperDoll();
+        const pd = new PaperDoll(DEFAULT_LAYERS);
         pdRef.current = pd;
         pd.container.position.set(160, 160);
         app.stage.addChild(pd.container);
@@ -100,45 +100,39 @@ export function PaperDollView() {
     anim: CharacterAnimator,
     cfg: CharacterConfig
   ) {
-    for (const equipSlot of EQUIP_SLOTS) {
-      const ref = cfg.layers[equipSlot];
-      if (!ref?.assetId) continue;
+    for (const [layerId, assetPath] of Object.entries(cfg.equipment)) {
+      if (!assetPath) continue;
 
-      const frameFile = anim.getFrameFile(ref.assetId);
+      const frameFile = anim.getFrameFile(assetPath);
       if (!frameFile) continue;
 
-      const cacheKey = `${ref.assetId}:${frameFile}`;
-      const renderSlots = EQUIP_TO_RENDER[equipSlot];
-
+      const cacheKey = `${assetPath}:${frameFile}`;
       if (texCache.current.has(cacheKey)) {
         const tex = texCache.current.get(cacheKey)!;
-        for (const rs of renderSlots) {
-          pd.setLayerTexture(rs, tex);
-        }
+        pd.setLayerTexture(layerId, tex);
         continue;
       }
 
       const base = import.meta.env.VITE_GAME_ASSET_PATH || "/GameAssets";
-      const url = `${base}/${ref.assetId}/${frameFile}`;
+      const url = `${base}/${assetPath}/${frameFile}`;
 
       Assets.load(url).then((tex) => {
         texCache.current.set(cacheKey, tex);
-        for (const rs of renderSlots) {
-          pd.setLayerTexture(rs, tex);
+        const sprite = pd.getLayerSprite(layerId);
+        if (sprite) {
+          pd.setLayerTexture(layerId, tex);
         }
       });
     }
   }
 
   function applyVisibility(pd: PaperDoll, cfg: CharacterConfig) {
-    for (const equipSlot of EQUIP_SLOTS) {
-      const state = layerStatesRef.current[equipSlot];
-      const hasItem = !!cfg.layers[equipSlot]?.assetId;
-      const renderSlots = EQUIP_TO_RENDER[equipSlot];
-      for (const rs of renderSlots) {
-        pd.setLayerVisible(rs, hasItem && state.visible);
-        pd.setLayerOpacity(rs, hasItem && state.visible ? state.alpha : 0);
-      }
+    const activeLayerIds = new Set(Object.keys(cfg.equipment));
+    for (const layer of DEFAULT_LAYERS) {
+      const state = layerStatesRef.current[layer.id];
+      const hasItem = activeLayerIds.has(layer.id) && !!cfg.equipment[layer.id];
+      pd.setLayerVisible(layer.id, hasItem && state.visible);
+      pd.setLayerOpacity(layer.id, hasItem && state.visible ? state.alpha : 0);
     }
   }
 

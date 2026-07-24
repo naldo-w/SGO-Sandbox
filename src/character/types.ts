@@ -1,4 +1,6 @@
 import type { PartSlot } from "../assets/contract";
+import type { LayerDefinition } from "../data/layers/LayerDefinition";
+import { DEFAULT_LAYERS } from "../data/layers/defaultLayers";
 
 export type DirectionCode =
   | "S" | "SE" | "E" | "NE"
@@ -14,11 +16,7 @@ export interface AssetReference {
   scaleOverride?: number;
 }
 
-export type EquipSlot = "body" | "face" | "hair" | "armor" | "weapon" | "accessory";
-
-export const EQUIP_SLOTS: EquipSlot[] = [
-  "body", "face", "hair", "armor", "weapon", "accessory",
-];
+export type EquipSlot = string;
 
 export interface LayerState {
   visible: boolean;
@@ -27,17 +25,22 @@ export interface LayerState {
 
 export interface CharacterConfig {
   race: string;
+  gender: string;
+  name: string;
   body: string;
-  layers: Partial<Record<EquipSlot, AssetReference>>;
+  equipment: Record<string, string>;
+  appearance: Record<string, string>;
   direction: DirectionCode;
   animation: AnimationState;
+  expression: string;
 }
 
 export interface CharacterPreset {
   name: string;
   race: string;
+  gender: string;
   body: string;
-  layers: Partial<Record<EquipSlot, AssetReference>>;
+  equipment: Record<string, string>;
 }
 
 export interface ResolvedLayer {
@@ -45,27 +48,48 @@ export interface ResolvedLayer {
   assetRef: AssetReference;
 }
 
-const FALLBACK_LAYER: AssetReference = { assetId: "" };
-
-export const EQUIP_TO_RENDER: Record<EquipSlot, PartSlot[]> = {
-  body:      ["Body"],
-  face:      ["Bonnet"],
-  hair:      ["Bonnet"],
-  armor:     ["Leg", "R-Arm", "Body", "L-Arm", "R-Shoulder", "L-Shoulder"],
-  weapon:    ["R-Arm"],
-  accessory: ["Back"],
-};
-
-export function resolveLayers(config: CharacterConfig): ResolvedLayer[] {
+export function resolveLayers(
+  equipment: Record<string, string>,
+  _race?: string
+): ResolvedLayer[] {
   const resolved: ResolvedLayer[] = [];
-  for (const [equipSlot, renderSlots] of Object.entries(EQUIP_TO_RENDER)) {
-    const ref = config.layers[equipSlot as EquipSlot] ?? FALLBACK_LAYER;
-    if (!ref.assetId) continue;
-    for (const renderSlot of renderSlots) {
-      resolved.push({ renderSlot, assetRef: ref });
+  const layerMap = buildLayerPartMap();
+
+  for (const [layerId, assetPath] of Object.entries(equipment)) {
+    if (!assetPath) continue;
+    const partSlots = layerMap[layerId] ?? inferPartSlots(layerId);
+    for (const ps of partSlots) {
+      resolved.push({
+        renderSlot: ps,
+        assetRef: { assetId: assetPath },
+      });
     }
   }
   return resolved;
+}
+
+function buildLayerPartMap(): Record<string, PartSlot[]> {
+  const map: Record<string, PartSlot[]> = {};
+  for (const layer of DEFAULT_LAYERS) {
+    map[layer.id] = layer.partSlots;
+  }
+  return map;
+}
+
+function inferPartSlots(layerId: string): PartSlot[] {
+  if (layerId === "hair" || layerId === "face") return ["Bonnet"];
+  if (layerId === "leg") return ["Leg"];
+  if (layerId === "body") return ["Body"];
+  if (layerId === "armor") return ["Leg", "R-Arm", "Body", "L-Arm", "R-Shoulder", "L-Shoulder"];
+  if (layerId === "weapon") return ["R-Arm"];
+  if (layerId === "accessory") return ["Back"];
+  return ["Body"];
+}
+
+export function getLayerOrder(layerIds: string[]): LayerDefinition[] {
+  return DEFAULT_LAYERS
+    .filter((l) => layerIds.includes(l.id))
+    .sort((a, b) => a.zIndex - b.zIndex);
 }
 
 export function defaultLayerState(): LayerState {
@@ -74,41 +98,14 @@ export function defaultLayerState(): LayerState {
 
 export function defaultConfig(): CharacterConfig {
   return {
-    race: "human",
+    race: "human-male",
+    gender: "male",
+    name: "New Character",
     body: "",
-    layers: {},
+    equipment: {},
+    appearance: {},
     direction: "S",
     animation: "idle",
+    expression: "normal",
   };
 }
-
-export const BUILTIN_PRESETS: CharacterPreset[] = [
-  {
-    name: "Human Soldier",
-    race: "human",
-    body: "Item/IT00_BODY",
-    layers: {
-      weapon: { assetId: "Item/IT00_WEAPON" },
-      armor:  { assetId: "Item/IT00_ARMOR" },
-    },
-  },
-  {
-    name: "Elf Archer",
-    race: "elf",
-    body: "Item/IT01_BODY",
-    layers: {
-      weapon: { assetId: "Item/IT01_WEAPON" },
-      hair:   { assetId: "Item/IT01_HAIR" },
-    },
-  },
-  {
-    name: "Dwarf Berserker",
-    race: "dwarf",
-    body: "Item/IT02_BODY",
-    layers: {
-      weapon: { assetId: "Item/IT02_WEAPON" },
-      armor:  { assetId: "Item/IT02_ARMOR" },
-      accessory: { assetId: "Item/IT02_CAPE" },
-    },
-  },
-];

@@ -1,56 +1,51 @@
 import { create } from "zustand";
-import type { AssetEntry } from "../assets/contract";
 import { assetLoader } from "../assets/AssetLoader";
 import type {
   CharacterConfig,
   CharacterPreset,
   EquipSlot,
-  AssetReference,
   DirectionCode,
   AnimationState,
   LayerState,
 } from "./types";
-import {
-  EQUIP_SLOTS,
-  defaultConfig,
-  defaultLayerState,
-  BUILTIN_PRESETS,
-} from "./types";
+import { defaultConfig, defaultLayerState } from "./types";
+import { BUILTIN_PRESETS } from "./presets";
+import { DEFAULT_LAYERS } from "../data/layers/defaultLayers";
 
 interface PaperdollState {
   config: CharacterConfig;
   animating: boolean;
   animSpeed: number;
   animFrame: number;
-  layerStates: Record<EquipSlot, LayerState>;
+  layerStates: Record<string, LayerState>;
   presets: CharacterPreset[];
   customPresets: CharacterPreset[];
-  candidates: Record<EquipSlot, AssetEntry[]>;
-  candidateSearch: Record<EquipSlot, string>;
 
-  setLayer: (slot: EquipSlot, ref: AssetReference | undefined) => void;
-  clearLayer: (slot: EquipSlot) => void;
+  setLayer: (layerId: string, assetPath: string | undefined) => void;
+  clearLayer: (layerId: string) => void;
   setDirection: (dir: DirectionCode) => void;
   setAnimation: (anim: AnimationState) => void;
   setRace: (race: string) => void;
+  setGender: (gender: string) => void;
   setBody: (body: string) => void;
+  setName: (name: string) => void;
   setAnimating: (v: boolean) => void;
   setAnimSpeed: (s: number) => void;
   setAnimFrame: (f: number) => void;
-  setLayerVisibility: (slot: EquipSlot, visible: boolean) => void;
-  setLayerAlpha: (slot: EquipSlot, alpha: number) => void;
+  setLayerVisibility: (layerId: string, visible: boolean) => void;
+  setLayerAlpha: (layerId: string, alpha: number) => void;
   loadPreset: (preset: CharacterPreset) => void;
   savePreset: (name: string) => void;
   deletePreset: (name: string) => void;
+  loadConfig: (cfg: CharacterConfig) => void;
   reset: () => void;
-  setCandidateSearch: (slot: EquipSlot, query: string) => void;
-  refreshCandidates: (slot: EquipSlot) => void;
-  refreshAllCandidates: () => void;
 }
 
-function makeLayerStates(): Record<EquipSlot, LayerState> {
-  const states = {} as Record<EquipSlot, LayerState>;
-  for (const s of EQUIP_SLOTS) states[s] = defaultLayerState();
+function makeLayerStates(): Record<string, LayerState> {
+  const states: Record<string, LayerState> = {};
+  for (const layer of DEFAULT_LAYERS) {
+    states[layer.id] = { visible: true, alpha: 1 };
+  }
   return states;
 }
 
@@ -62,22 +57,20 @@ export const usePaperdollStore = create<PaperdollState>((set, get) => ({
   layerStates: makeLayerStates(),
   presets: BUILTIN_PRESETS,
   customPresets: [],
-  candidates: { body: [], face: [], hair: [], armor: [], weapon: [], accessory: [] },
-  candidateSearch: { body: "", face: "", hair: "", armor: "", weapon: "", accessory: "" },
 
-  setLayer: (slot, ref) =>
+  setLayer: (layerId, assetPath) =>
     set((s) => {
-      const layers = { ...s.config.layers };
-      if (ref) layers[slot] = ref;
-      else delete layers[slot];
-      return { config: { ...s.config, layers } };
+      const equipment = { ...s.config.equipment };
+      if (assetPath) equipment[layerId] = assetPath;
+      else delete equipment[layerId];
+      return { config: { ...s.config, equipment } };
     }),
 
-  clearLayer: (slot) =>
+  clearLayer: (layerId) =>
     set((s) => {
-      const layers = { ...s.config.layers };
-      delete layers[slot];
-      return { config: { ...s.config, layers } };
+      const equipment = { ...s.config.equipment };
+      delete equipment[layerId];
+      return { config: { ...s.config, equipment } };
     }),
 
   setDirection: (direction) =>
@@ -87,46 +80,62 @@ export const usePaperdollStore = create<PaperdollState>((set, get) => ({
     set((s) => ({ config: { ...s.config, animation } })),
 
   setRace: (race) =>
-    set((s) => ({ config: { ...s.config, race } })),
+    set((s) => ({ config: { ...s.config, race }, layerStates: makeLayerStates() })),
+
+  setGender: (gender) =>
+    set((s) => ({ config: { ...s.config, gender } })),
 
   setBody: (body) =>
     set((s) => ({ config: { ...s.config, body } })),
+
+  setName: (name) =>
+    set((s) => ({ config: { ...s.config, name } })),
 
   setAnimating: (animating) => set({ animating }),
   setAnimSpeed: (animSpeed) => set({ animSpeed }),
   setAnimFrame: (animFrame) => set({ animFrame }),
 
-  setLayerVisibility: (slot, visible) =>
+  setLayerVisibility: (layerId, visible) =>
     set((s) => ({
       layerStates: {
         ...s.layerStates,
-        [slot]: { ...s.layerStates[slot], visible },
+        [layerId]: { ...s.layerStates[layerId], visible },
       },
     })),
 
-  setLayerAlpha: (slot, alpha) =>
+  setLayerAlpha: (layerId, alpha) =>
     set((s) => ({
       layerStates: {
         ...s.layerStates,
-        [slot]: { ...s.layerStates[slot], alpha },
+        [layerId]: { ...s.layerStates[layerId], alpha },
       },
     })),
 
   loadPreset: (preset) =>
-    set((s) => ({
+    set(() => ({
       config: {
         race: preset.race,
+        gender: preset.gender,
+        name: preset.name,
         body: preset.body,
-        layers: { ...preset.layers },
-        direction: s.config.direction,
-        animation: s.config.animation,
+        equipment: { ...preset.equipment },
+        appearance: {},
+        direction: "S",
+        animation: "idle",
+        expression: "normal",
       },
       layerStates: makeLayerStates(),
     })),
 
   savePreset: (name) => {
     const { config } = get();
-    const newPreset: CharacterPreset = { name, ...config };
+    const newPreset: CharacterPreset = {
+      name,
+      race: config.race,
+      gender: config.gender,
+      body: config.body,
+      equipment: { ...config.equipment },
+    };
     set((s) => ({
       customPresets: [...s.customPresets.filter((p) => p.name !== name), newPreset],
     }));
@@ -137,6 +146,9 @@ export const usePaperdollStore = create<PaperdollState>((set, get) => ({
       customPresets: s.customPresets.filter((p) => p.name !== name),
     })),
 
+  loadConfig: (cfg) =>
+    set({ config: cfg, layerStates: makeLayerStates() }),
+
   reset: () =>
     set({
       config: defaultConfig(),
@@ -145,41 +157,4 @@ export const usePaperdollStore = create<PaperdollState>((set, get) => ({
       animSpeed: 1,
       animFrame: 0,
     }),
-
-  setCandidateSearch: (slot, query) =>
-    set((s) => {
-      const candidateSearch = { ...s.candidateSearch, [slot]: query };
-      return { candidateSearch };
-    }),
-
-  refreshCandidates: (slot) => {
-    const state = get();
-    const idx = assetLoader.getIndex();
-    if (!idx) return;
-    const query = state.candidateSearch[slot].toLowerCase();
-    const results = idx.assets.filter((a) => {
-      if (a.type !== "sprite") return false;
-      if (!query) return true;
-      return (
-        a.id.toLowerCase().includes(query) ||
-        a.path.toLowerCase().includes(query)
-      );
-    });
-    set((s) => ({ candidates: { ...s.candidates, [slot]: results } }));
-  },
-
-  refreshAllCandidates: () => {
-    const idx = assetLoader.getIndex();
-    if (!idx) return;
-    const results: Partial<Record<EquipSlot, AssetEntry[]>> = {};
-    for (const slot of EQUIP_SLOTS) {
-      results[slot] = idx.assets.filter((a) => a.type === "sprite");
-    }
-    set((s) => ({
-      candidates: {
-        ...s.candidates,
-        ...results,
-      } as Record<EquipSlot, AssetEntry[]>,
-    }));
-  },
 }));

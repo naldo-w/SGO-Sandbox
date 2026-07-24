@@ -1,60 +1,67 @@
 import { Container, Sprite } from "pixi.js";
 import type { PartSlot } from "../assets/contract";
-
-export const LAYER_ORDER: PartSlot[] = [
-  "Back", "Leg", "R-Arm", "Body", "L-Arm",
-  "R-Shoulder", "L-Shoulder", "Bonnet",
-];
+import type { LayerDefinition } from "../data/layers/LayerDefinition";
 
 export class PaperDoll {
   public container = new Container();
-  private layers = new Map<PartSlot, Sprite>();
+  private layerSprites = new Map<string, Sprite>();
+  private _layerDefs: LayerDefinition[] = [];
 
-  constructor() {
-    for (const slot of LAYER_ORDER) {
+  constructor(layerDefs?: LayerDefinition[]) {
+    if (layerDefs) this.setLayerDefs(layerDefs);
+  }
+
+  setLayerDefs(defs: LayerDefinition[]) {
+    this._layerDefs = [...defs].sort((a, b) => a.zIndex - b.zIndex);
+    this.container.removeChildren();
+    this.layerSprites.clear();
+    for (const def of this._layerDefs) {
       const sprite = new Sprite();
       sprite.visible = false;
       sprite.anchor.set(0.5, 0.5);
+      sprite.label = def.id;
       this.container.addChild(sprite);
-      this.layers.set(slot, sprite);
+      this.layerSprites.set(def.id, sprite);
     }
+  }
+
+  getLayerDefs(): LayerDefinition[] {
+    return this._layerDefs;
   }
 
   setLayerTexture(
-    slot: PartSlot,
+    layerId: string,
     texture: import("pixi.js").Texture,
     anchor?: [number, number]
   ) {
-    const sprite = this.layers.get(slot);
+    const sprite = this.layerSprites.get(layerId);
     if (!sprite) return;
     sprite.texture = texture;
     sprite.visible = true;
-    if (anchor) {
-      sprite.anchor.set(anchor[0], anchor[1]);
-    }
+    if (anchor) sprite.anchor.set(anchor[0], anchor[1]);
   }
 
-  getLayerSprite(slot: PartSlot): Sprite | undefined {
-    return this.layers.get(slot);
+  getLayerSprite(layerId: string): Sprite | undefined {
+    return this.layerSprites.get(layerId);
   }
 
-  setLayerOpacity(slot: PartSlot, alpha: number) {
-    const sprite = this.layers.get(slot);
+  setLayerOpacity(layerId: string, alpha: number) {
+    const sprite = this.layerSprites.get(layerId);
     if (sprite) sprite.alpha = alpha;
   }
 
-  setLayerVisible(slot: PartSlot, visible: boolean) {
-    const sprite = this.layers.get(slot);
+  setLayerVisible(layerId: string, visible: boolean) {
+    const sprite = this.layerSprites.get(layerId);
     if (sprite) sprite.visible = visible;
   }
 
-  hideLayer(slot: PartSlot) {
-    const sprite = this.layers.get(slot);
+  hideLayer(layerId: string) {
+    const sprite = this.layerSprites.get(layerId);
     if (sprite) sprite.visible = false;
   }
 
   hideAll() {
-    for (const sprite of this.layers.values()) {
+    for (const sprite of this.layerSprites.values()) {
       sprite.visible = false;
     }
   }

@@ -1,22 +1,8 @@
 # Milestones
 
-## M0 — Scaffold (Week 1)
+## M0 — Scaffold
 
 **Goal**: Project skeleton with working PixiJS canvas.
-
-```typescript
-// Acceptance criteria:
-- npm run dev starts Vite dev server
-- PixiJS canvas visible in browser
-- asset.json loads successfully
-- No runtime errors in console
-```
-
-**Deliverables**:
-- `src/renderer/PixiApp.ts` — Application singleton
-- `src/assets/AssetLoader.ts` — asset.json fetch + parse
-- `src/App.tsx` — root component with canvas container
-- `src/components/Toolbar.tsx` — placeholder toolbar
 
 **Verification**:
 - ✅ Vite dev server starts on port 3000
@@ -27,115 +13,86 @@
 
 ---
 
-## M1 — Asset Browser (Week 2)
+## M1 — Asset Browser
 
 **Goal**: Browse and preview any sprite in the GameAssets index.
 
-```typescript
-// Acceptance criteria:
-- Category tabs (Enemy, NPC, Player, etc.)
-- Sprite grid with thumbnail per sprite
-- Click sprite → opens preview panel
-- Play/pause/seek controls work
-- FPS indicator
-```
-
 **Deliverables**:
-- `src/ui/AssetBrowser.tsx` — Asset list with category filter
-- `src/ui/AssetSearch.tsx` — Search + category filter bar
-- `src/ui/AssetPreview.tsx` — PixiJS preview panel with frame/direction info
-- `src/assets/AssetLoader.ts` — Full validation + error handling + search
-- `.env` — VITE_GAME_ASSET_PATH configuration
-- `docs/ASSET_LOADING.md` — Asset loading guide for dev & production
-- `tests/asset-loader.test.ts` — 7 test cases (load, HTTP error, JSON error, schema, network, lookup, search)
+- Asset list with category filter
+- PixiJS preview panel with animation playback
+- Play/pause/seek/speed/direction controls
+- Search + category filter bar
+- Asset loading guide
 
 ---
 
-## M2 — Character Composer (Weeks 3–4)
+## M2 — Character Composer (Data-Driven Architecture)
 
-**Goal**: Full paper doll character with multi-layer animation.
+### M2.1 — Foundation
 
-```typescript
-// Acceptance criteria:
-- 8-part character composition (Back → Bonnet)
-- Part textures load and align correctly
-- All action directions playable (NS, NW, FA, ND, NH)
-- Action switching works mid-animation
-- Race/class selection changes appearance
-```
+- `CharacterConfig` data model
+- `PaperDoll` per-layer compositor
+- Basic layer rendering with hardcoded slots
 
-**Deliverables**:
-- `src/paperdoll/PaperDoll.ts`
-- `src/renderer/CharacterRenderer.ts`
-- `src/components/CharacterViewer.tsx`
+### M2.2 — Runtime Refinement
 
-**M2 is the core differentiator** — no other SGO tool has a working
-multi-layer paper doll in the browser. This milestone validates the
-entire asset pipeline + animation system end-to-end.
+- `CharacterAnimator` — single clock, direction-aware frame mapping
+- Per-layer visibility + opacity controls
+- Character presets (6 built-in)
+- SlotPicker with thumbnail previews
+
+### M2.3 — Architecture Refactor (Current)
+
+**Refactored from hardcoded slots to data-driven architecture:**
+
+| Before | After |
+|--------|-------|
+| 6 hardcoded equip slots | 11 data-driven `LayerDefinition`s |
+| `EQUIP_TO_RENDER` static map | `defaultLayers.ts` with zIndex + partSlots |
+| Fixed presets | `presets.ts` + custom preset save/load |
+| No inventory | `Inventory.ts` + `inventoryStore.ts` (all-items sandbox) |
+| No save system | `CharacterSave.ts` (localStorage + export) |
+| No race system | `RaceDefinition` (5 races: Migu, Human M/F, Mech, Asian) |
+| No validation | `EquipmentSystem.ts` (race/layer compatibility) |
+
+**New data layer**: `src/data/races/`, `src/data/layers/`, `src/data/equipment/`, `src/data/characters/`
+
+**Updated docs**: `docs/ARCHITECTURE.md` fully rewritten
+
+**Target for M3**: Character Studio — full SGO character creation flow,
+complete equipment backpack, photo mode basics
 
 ---
 
-## M3 — Monster & Effect Showcase (Week 5)
+## M3 — Character Studio
+
+**Goal**: Full SGO character creation with race selection, equipment backpack, save/load.
+
+```typescript
+// Acceptance criteria:
+- Migu / Human Male / Human Female / Mech Spirit / Asian
+- Full equipment backpack (search, filter, equip)
+- Character save/load (localStorage + export)
+- Photo Mode basics
+```
+
+---
+
+## M4 — Monster & Effect Showcase
 
 **Goal**: Browse monsters, skills, and effects with full animation.
 
-```typescript
-// Acceptance criteria:
-- Monster gallery with 1,638 entries
-- Each monster shows all available directions
-- Effect browser with 164 effects
-- Effects can be layered on a dummy character
-- Search by name or ID
-```
-
-**Deliverables**:
-- `src/components/MonsterShowcase.tsx`
-- `src/components/EffectViewer.tsx`
-
 ---
 
-## M4 — Map Viewer (Weeks 6–7)
+## M5 — Map Viewer
 
 **Goal**: View rendered game maps with interactive camera.
 
-```typescript
-// Acceptance criteria:
-- Map tile grid rendered
-- Camera pan with mouse drag
-- Camera zoom with scroll wheel
-- Grid overlay toggle
-- Object layer rendered on top of tiles
-```
-
-**Deliverables**:
-- `src/renderer/MapRenderer.ts`
-- `src/renderer/Camera.ts`
-- `src/components/MapViewer.tsx`
-
-**Known dependency**: MapRenderer requires MAP/BLG/GTX parsers
-from SGO-Reverse to produce tile data. If those are incomplete,
-M4 uses a placeholder grid.
-
 ---
 
-## M5 — Polish & Deploy (Week 8)
+## M6 — Polish & Deploy
 
 **Goal**: Production-ready with screenshot mode and deployment.
-
-```typescript
-// Acceptance criteria:
-- Screenshot captures current view as PNG
-- UI toggle for clean captures
-- Dark/light theme
-- Static build works with any HTTP server
-- README with setup and usage guide
-- Performance: 60fps for single character
-```
-
-**Deliverables**:
-- `src/screenshot/ScreenshotManager.ts`
-- Build config (`vite.config.ts`)
-- Deployment guide
 
 ---
 
@@ -147,13 +104,14 @@ The Minimum Viable Product is **M0 + M1 + M2**:
 |---------|-----|----------|
 | Asset browser | ✅ | Search, filtering |
 | Single sprite playback | ✅ | Direction switching |
-| Paper doll (8 layers) | ✅ | All 5 races |
-| Action state machine | ✅ | Full animation set |
-| Monster showcase | — | M3 |
-| Effect viewer | — | M3 |
-| Map viewer | — | M4 |
-| Screenshot | — | M5 |
+| Paper doll (data-driven) | ✅ | All 5 races |
+| Animation sync | ✅ | Full animation set |
+| Equipment backpack | ✅ | — |
+| Character save/export | ✅ | Cloud sync |
+| Monster showcase | — | M4 |
+| Effect viewer | — | M4 |
+| Map viewer | — | M5 |
+| Photo Mode | — | M3 |
 
-**MVP acceptance**: User can browse, compose, and animate a multi-layer
-player character in the browser. This proves the end-to-end integration
-of SGO-Reverse output + PixiJS rendering.
+**MVP acceptance**: User can browse, compose, save, and animate a multi-layer
+player character in the browser. All race/layer/equipment data is definition-driven.
