@@ -1,21 +1,30 @@
-import { useEffect, useRef, useCallback } from "react";
-import { Application, Assets, Container, Text, TextStyle } from "pixi.js";
+import { useEffect, useRef } from "react";
+import { Application, Assets, Text, TextStyle } from "pixi.js";
 import { PaperDoll } from "./PaperDoll";
+import { CharacterAnimator } from "./CharacterAnimator";
 import { usePaperdollStore } from "./paperdollStore";
-import { assetLoader } from "../assets/AssetLoader";
-import { resolveLayers } from "./types";
-import type { ResolvedLayer } from "./types";
+import { EQUIP_SLOTS, EQUIP_TO_RENDER } from "./types";
+import type { CharacterConfig, LayerState } from "./types";
 
 export function PaperDollView() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
-  const paperDollRef = useRef<PaperDoll | null>(null);
+  const pdRef = useRef<PaperDoll | null>(null);
+  const animRef = useRef<CharacterAnimator | null>(null);
   const statusRef = useRef<Text | null>(null);
-  const frameCountRef = useRef(0);
-  const rafRef = useRef<number>(0);
-  const lastTimeRef = useRef(0);
 
-  const config = usePaperdollStore((s) => s.config);
+  const configRef = useRef<CharacterConfig>(usePaperdollStore.getState().config);
+  const layerStatesRef = useRef<Record<string, LayerState>>(usePaperdollStore.getState().layerStates);
+
+  useEffect(() => {
+    const unsub = usePaperdollStore.subscribe((s) => {
+      configRef.current = s.config;
+      layerStatesRef.current = s.layerStates;
+    });
+    return unsub;
+  }, []);
+
+  const setAnimFrame = usePaperdollStore((s) => s.setAnimFrame);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -31,9 +40,13 @@ export function PaperDollView() {
         canvasRef.current.appendChild(app.canvas as HTMLCanvasElement);
 
         const pd = new PaperDoll();
-        paperDollRef.current = pd;
+        pdRef.current = pd;
         pd.container.position.set(160, 160);
         app.stage.addChild(pd.container);
+
+        const anim = new CharacterAnimator();
+        anim.play();
+        animRef.current = anim;
 
         const st = new Text({
           text: "",
@@ -43,63 +56,91 @@ export function PaperDollView() {
         statusRef.current = st;
         app.stage.addChild(st);
 
-        applyLayers(pd, resolveLayers({ ...config }));
-
-        lastTimeRef.current = performance.now();
+        let lastTime = performance.now();
         function tick() {
           if (destroyed) return;
           const now = performance.now();
-          const dt = (now - lastTimeRef.current) / 1000;
-          lastTimeRef.current = now;
-          frameCountRef.current++;
-          rafRef.current = requestAnimationFrame(tick);
+          const dt = (now - lastTime) / 1000;
+          lastTime = now;
+
+          const cfg = configRef.current;
+          const anim2 = animRef.current!;
+          anim2.setDirection(cfg.direction);
+          anim2.setState(cfg.animation);
+
+          if (anim2.playing) {
+            anim2.update(dt);
+            setAnimFrame(anim2.currentFrame);
+          }
+
+          updateLayers(pd, anim2, cfg);
+          applyVisibility(pd, cfg);
+          st.text =
+            `${cfg.race} · ${cfg.direction} · ${cfg.animation} ` +
+            `| frame ${anim2.currentFrame} ${anim2.playing ? "▶" : "⏸"}`;
+          requestAnimationFrame(tick);
         }
-        rafRef.current = requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
       });
 
     return () => {
       destroyed = true;
-      cancelAnimationFrame(rafRef.current);
       app.destroy(true);
       appRef.current = null;
-      paperDollRef.current = null;
+      pdRef.current = null;
+      animRef.current = null;
       statusRef.current = null;
     };
   }, []);
 
-  useEffect(() => {
-    const pd = paperDollRef.current;
-    if (!pd) return;
-    applyLayers(pd, resolveLayers({ ...config }));
+  const texCache = useRef<Map<string, import("pixi.js").Texture>>(new Map());
 
-    if (statusRef.current) {
-      statusRef.current.text = `${config.race} · ${config.direction} · ${config.animation}`;
-    }
-  }, [config]);
+  function updateLayers(
+    pd: PaperDoll,
+    anim: CharacterAnimator,
+    cfg: CharacterConfig
+  ) {
+    for (const equipSlot of EQUIP_SLOTS) {
+      const ref = cfg.layers[equipSlot];
+      if (!ref?.assetId) continue;
 
-  const applyLayers = useCallback(
-    async (pd: PaperDoll, layers: ResolvedLayer[]) => {
-      pd.hideAll();
-      for (const l of layers) {
-        try {
-          const meta = await assetLoader.loadMetadata(l.assetRef.assetId);
-          if (!meta) continue;
-          const firstFrame = meta.original_file || "frame_000.webp";
-          const url = assetLoader.getFrameUrl(l.assetRef.assetId, firstFrame);
-          const texture = await Assets.load(url);
-          if (!texture) continue;
-          pd.setLayerTexture(
-            l.renderSlot,
-            texture,
-            l.assetRef.anchorOverride ?? [0.5, 0.5]
-          );
-        } catch {
-          // skip layer
+      const frameFile = anim.getFrameFile(ref.assetId);
+      if (!frameFile) continue;
+
+      const cacheKey = `${ref.assetId}:${frameFile}`;
+      const renderSlots = EQUIP_TO_RENDER[equipSlot];
+
+      if (texCache.current.has(cacheKey)) {
+        const tex = texCache.current.get(cacheKey)!;
+        for (const rs of renderSlots) {
+          pd.setLayerTexture(rs, tex);
         }
+        continue;
       }
-    },
-    []
-  );
+
+      const base = import.meta.env.VITE_GAME_ASSET_PATH || "/GameAssets";
+      const url = `${base}/${ref.assetId}/${frameFile}`;
+
+      Assets.load(url).then((tex) => {
+        texCache.current.set(cacheKey, tex);
+        for (const rs of renderSlots) {
+          pd.setLayerTexture(rs, tex);
+        }
+      });
+    }
+  }
+
+  function applyVisibility(pd: PaperDoll, cfg: CharacterConfig) {
+    for (const equipSlot of EQUIP_SLOTS) {
+      const state = layerStatesRef.current[equipSlot];
+      const hasItem = !!cfg.layers[equipSlot]?.assetId;
+      const renderSlots = EQUIP_TO_RENDER[equipSlot];
+      for (const rs of renderSlots) {
+        pd.setLayerVisible(rs, hasItem && state.visible);
+        pd.setLayerOpacity(rs, hasItem && state.visible ? state.alpha : 0);
+      }
+    }
+  }
 
   return (
     <div style={styles.container}>
