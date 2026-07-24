@@ -18,6 +18,13 @@
 - `src/App.tsx` — root component with canvas container
 - `src/components/Toolbar.tsx` — placeholder toolbar
 
+**Verification**:
+- ✅ Vite dev server starts on port 3000
+- ✅ PixiJS canvas renders with debug overlay
+- ✅ AssetLoader validates schema + handles errors
+- ✅ DebugScene shows FPS counter + render info
+- ✅ vitest test suite for AssetLoader passes
+
 ---
 
 ## M1 — Asset Browser (Week 2)
@@ -34,9 +41,13 @@
 ```
 
 **Deliverables**:
-- `src/components/AssetBrowser.tsx`
-- `src/animation/AnimationController.ts`
-- `src/components/PlayerControls.tsx`
+- `src/ui/AssetBrowser.tsx` — Asset list with category filter
+- `src/ui/AssetSearch.tsx` — Search + category filter bar
+- `src/ui/AssetPreview.tsx` — PixiJS preview panel with frame/direction info
+- `src/assets/AssetLoader.ts` — Full validation + error handling + search
+- `.env` — VITE_GAME_ASSET_PATH configuration
+- `docs/ASSET_LOADING.md` — Asset loading guide for dev & production
+- `tests/asset-loader.test.ts` — 7 test cases (load, HTTP error, JSON error, schema, network, lookup, search)
 
 ---
 

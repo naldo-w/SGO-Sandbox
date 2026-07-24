@@ -1,27 +1,55 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Renderer } from "./engine/Renderer";
-import { Scene } from "./engine/Scene";
-import { Camera } from "./engine/Camera";
-import { assetLoader } from "./assets/AssetLoader";
+import { DebugScene } from "./engine/DebugScene";
+import { assetLoader, type LoadResult } from "./assets/AssetLoader";
+import { AssetBrowser } from "./ui/AssetBrowser";
+
+type AppPhase = "init" | "loading" | "ready" | "error";
 
 function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const rendererRef = useRef<Renderer | null>(null);
+  const debugRef = useRef<DebugScene | null>(null);
+  const [phase, setPhase] = useState<AppPhase>("init");
+  const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
 
   useEffect(() => {
     const renderer = new Renderer();
-    const scene = new Scene();
-    const camera = new Camera();
+    rendererRef.current = renderer;
+    const debug = new DebugScene();
+    debugRef.current = debug;
 
-    renderer.init(canvasRef.current!, 1024, 768).then(() => {
-      renderer.app.stage.addChild(camera.container);
-      camera.container.addChild(scene.container);
-      assetLoader.loadIndex().then((idx) => {
-        console.log(`SGO-Sandbox ready: ${idx.assets.length} assets`);
+    renderer
+      .init(canvasRef.current!, window.innerWidth - 320, window.innerHeight)
+      .then(() => {
+        renderer.app.stage.addChild(debug.container);
+        debug.setInfo("Renderer: OK");
+
+        setPhase("loading");
+        return assetLoader.loadIndex();
+      })
+      .then((result) => {
+        setLoadResult(result);
+        if (result.status === "success") {
+          debug.setInfo(
+            `Assets: ${result.assetCount} loaded (${JSON.stringify(assetLoader.getCategoryCounts())})`
+          );
+          renderer.app.stage.removeChild(debug.container);
+          setPhase("ready");
+        } else {
+          debug.setInfo(`Error: ${result.error}`);
+          setPhase("error");
+        }
       });
-    });
+
+    const animLoop = () => {
+      debug.update(renderer);
+      requestAnimationFrame(animLoop);
+    };
+    requestAnimationFrame(animLoop);
 
     const handleResize = () => {
-      renderer.resize(window.innerWidth, window.innerHeight);
+      renderer.resize(window.innerWidth - 320, window.innerHeight);
     };
     window.addEventListener("resize", handleResize);
 
@@ -32,11 +60,66 @@ function App() {
   }, []);
 
   return (
-    <div
-      ref={canvasRef}
-      style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
-    />
+    <div style={styles.root}>
+      <div ref={canvasRef} style={styles.canvas} />
+      <div style={styles.panel}>
+        {phase === "loading" && (
+          <div style={styles.status}>
+            <div style={styles.spinner} />
+            <div>Loading assets...</div>
+          </div>
+        )}
+        {phase === "error" && (
+          <div style={styles.status}>
+            <div style={{ color: "var(--danger)", fontWeight: 600 }}>
+              Failed to load assets
+            </div>
+            <div style={{ fontSize: 12, marginTop: 8, color: "var(--text-dim)" }}>
+              {loadResult?.error}
+            </div>
+          </div>
+        )}
+        {phase === "ready" && <AssetBrowser />}
+      </div>
+    </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  root: {
+    display: "flex",
+    width: "100vw",
+    height: "100vh",
+  },
+  canvas: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  panel: {
+    width: "320px",
+    display: "flex",
+    flexDirection: "column",
+    background: "var(--bg-panel)",
+    borderLeft: "1px solid var(--border)",
+  },
+  status: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    gap: "12px",
+    padding: "24px",
+    textAlign: "center",
+  },
+  spinner: {
+    width: "24px",
+    height: "24px",
+    border: "2px solid var(--border)",
+    borderTopColor: "var(--accent)",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
+};
 
 export default App;
