@@ -1,16 +1,19 @@
 import { useState } from "react";
 
-const CATEGORIES = [
-  { key: "", label: "All" },
-  { key: "sprite", label: "Sprites" },
-];
-
 interface AssetSearchProps {
   categoryCounts: Record<string, number>;
   selectedCategory: string;
   onCategoryChange: (cat: string) => void;
   onSearch: (query: string) => void;
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  sprite: "Sprites",
+  texture: "Textures",
+  map: "Maps",
+  item: "Items",
+  palette: "Palettes",
+};
 
 export function AssetSearch({
   categoryCounts,
@@ -19,6 +22,8 @@ export function AssetSearch({
   onSearch,
 }: AssetSearchProps) {
   const [query, setQuery] = useState("");
+
+  const categories = Object.keys(categoryCounts).sort();
 
   return (
     <div style={styles.container}>
@@ -33,19 +38,25 @@ export function AssetSearch({
         }}
       />
       <div style={styles.filters}>
-        {CATEGORIES.map((c) => (
+        <button
+          style={{
+            ...styles.filterBtn,
+            ...(selectedCategory === "" ? styles.filterActive : {}),
+          }}
+          onClick={() => onCategoryChange("")}
+        >
+          All ({Object.values(categoryCounts).reduce((a, b) => a + b, 0)})
+        </button>
+        {categories.map((cat) => (
           <button
-            key={c.key}
+            key={cat}
             style={{
               ...styles.filterBtn,
-              ...(selectedCategory === c.key ? styles.filterActive : {}),
+              ...(selectedCategory === cat ? styles.filterActive : {}),
             }}
-            onClick={() => onCategoryChange(c.key)}
+            onClick={() => onCategoryChange(cat)}
           >
-            {c.label}
-            {c.key && categoryCounts[c.key] !== undefined
-              ? ` (${categoryCounts[c.key]})`
-              : ""}
+            {CATEGORY_LABELS[cat] ?? cat} ({categoryCounts[cat]})
           </button>
         ))}
       </div>

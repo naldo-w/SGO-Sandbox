@@ -149,6 +149,30 @@ export class AssetLoader {
     }
     return counts;
   }
+
+  getCategories(): string[] {
+    if (!this.index) return [];
+    const cats = new Set(this.index.assets.map((a) => a.type));
+    return Array.from(cats).sort();
+  }
+
+  getFrameUrl(spritePath: string, frameFile: string): string {
+    const base = getAssetPath();
+    return `${base}/${spritePath}/${frameFile}`;
+  }
+
+  getSpriteBaseUrl(spritePath: string): string {
+    const base = getAssetPath();
+    return `${base}/${spritePath}`;
+  }
+
+  reset(): void {
+    this.index = null;
+    this.animationCache.clear();
+    this.metadataCache.clear();
+    this._status = "idle";
+    this._error = null;
+  }
 }
 
 export const assetLoader = new AssetLoader();

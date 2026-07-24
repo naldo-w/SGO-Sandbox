@@ -19,9 +19,14 @@ const INVALID_INDEX_MISSING_FIELDS = {
 };
 
 describe("AssetLoader", () => {
-  beforeEach(() => {
+  let loader: import("../src/assets/AssetLoader").AssetLoader;
+
+  beforeEach(async () => {
     vi.restoreAllMocks();
     import.meta.env.VITE_GAME_ASSET_PATH = "/GameAssets";
+    const mod = await import("../src/assets/AssetLoader");
+    loader = mod.assetLoader;
+    loader.reset();
   });
 
   it("loads valid asset.json successfully", async () => {
@@ -30,8 +35,7 @@ describe("AssetLoader", () => {
       json: () => Promise.resolve(VALID_INDEX),
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    const result = await assetLoader.loadIndex();
+    const result = await loader.loadIndex();
 
     expect(result.status).toBe("success");
     expect(result.assetCount).toBe(1);
@@ -45,8 +49,7 @@ describe("AssetLoader", () => {
       statusText: "Not Found",
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    const result = await assetLoader.loadIndex();
+    const result = await loader.loadIndex();
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("404");
@@ -59,8 +62,7 @@ describe("AssetLoader", () => {
       json: () => Promise.reject(new Error("Unexpected token")),
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    const result = await assetLoader.loadIndex();
+    const result = await loader.loadIndex();
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("Invalid JSON");
@@ -72,8 +74,7 @@ describe("AssetLoader", () => {
       json: () => Promise.resolve(INVALID_INDEX_MISSING_FIELDS),
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    const result = await assetLoader.loadIndex();
+    const result = await loader.loadIndex();
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("Schema mismatch");
@@ -82,8 +83,7 @@ describe("AssetLoader", () => {
   it("handles network failure", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    const result = await assetLoader.loadIndex();
+    const result = await loader.loadIndex();
 
     expect(result.status).toBe("error");
     expect(result.error).toBe("Network error");
@@ -95,14 +95,13 @@ describe("AssetLoader", () => {
       json: () => Promise.resolve(VALID_INDEX),
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    await assetLoader.loadIndex();
+    await loader.loadIndex();
 
-    const asset = assetLoader.getAsset("Enemy/EN050B");
+    const asset = loader.getAsset("Enemy/EN050B");
     expect(asset).not.toBeNull();
     expect(asset!.type).toBe("sprite");
 
-    const missing = assetLoader.getAsset("nonexistent");
+    const missing = loader.getAsset("nonexistent");
     expect(missing).toBeNull();
   });
 
@@ -112,13 +111,87 @@ describe("AssetLoader", () => {
       json: () => Promise.resolve(VALID_INDEX),
     });
 
-    const { assetLoader } = await import("../src/assets/AssetLoader");
-    await assetLoader.loadIndex();
+    await loader.loadIndex();
 
-    const results = assetLoader.search("EN050B");
+    const results = loader.search("EN050B");
     expect(results.length).toBe(1);
 
-    const noResults = assetLoader.search("zzzzz");
+    const noResults = loader.search("zzzzz");
     expect(noResults.length).toBe(0);
+  });
+
+  it("getCategories returns unique types", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(VALID_INDEX),
+    });
+
+    await loader.loadIndex();
+
+    const cats = loader.getCategories();
+    expect(cats).toContain("sprite");
+  });
+
+  it("getCategoryCounts returns correct counts", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(VALID_INDEX),
+    });
+
+    await loader.loadIndex();
+
+    const counts = loader.getCategoryCounts();
+    expect(counts["sprite"]).toBe(1);
+  });
+
+  it("getFrameUrl and getSpriteBaseUrl resolve paths", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(VALID_INDEX),
+    });
+
+    await loader.loadIndex();
+
+    const url = loader.getFrameUrl("sprites/Enemy/EN050B", "frame_000.webp");
+    expect(url).toBe("/GameAssets/sprites/Enemy/EN050B/frame_000.webp");
+  });
+
+  it("getAssetsByCategory filters correctly", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(VALID_INDEX),
+    });
+
+    await loader.loadIndex();
+
+    const sprites = loader.getAssetsByCategory("sprite");
+    expect(sprites.length).toBe(1);
+
+    const maps = loader.getAssetsByCategory("map");
+    expect(maps.length).toBe(0);
+  });
+
+  it("status reflects load phase", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(VALID_INDEX),
+    });
+
+    expect(loader.status).toBe("idle");
+
+    const promise = loader.loadIndex();
+    expect(loader.status).toBe("loading");
+
+    await promise;
+    expect(loader.status).toBe("success");
+  });
+
+  it("error status persists after failed load", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+    await loader.loadIndex();
+
+    expect(loader.status).toBe("error");
+    expect(loader.error).toBe("Network error");
   });
 });
