@@ -20,7 +20,12 @@
 │  paperdollStore — character config, layers, presets   │
 │  inventoryStore — all-items sandbox inventory          │
 ├──────────────────────────────────────────────────────┤
-│                Data Definition Layer                   │
+│                Game Data Layer                         │
+│  AssetCatalog — categorize assets from asset.json     │
+│  AssetQuery — query/filter/search API                 │
+│  AssetCategory — path-prefix based classification     │
+├──────────────────────────────────────────────────────┤
+│              Data Definition Layer                    │
 │  races/  — RaceDefinition (Migu, Human, Mech, Asian)  │
 │  layers/ — LayerDefinition (zIndex, partSlots)        │
 │  equipment/ — EquipmentDefinition (asset→layer map)   │
@@ -132,6 +137,10 @@ src/
 │   └── contract.ts             # All TypeScript interfaces
 │
 ├── character/
+│   ├── creation/
+│   │   ├── CharacterCreationFlow.ts  # Step-based creation flow
+│   │   ├── CreationState.ts          # Creation step state machine
+│   │   └── CreationOptions.ts        # Race/gender/body/face/hair options
 │   ├── CharacterAnimator.ts    # Single-clock animation driver
 │   ├── Character.ts            # Character container class
 │   ├── CharacterPanel.tsx      # Main character composer UI
@@ -143,6 +152,10 @@ src/
 │   └── types.ts                # Character-specific types
 │
 ├── data/
+│   ├── game/
+│   │   ├── AssetCatalog.ts      # Categorized catalog from asset.json
+│   │   ├── AssetCategory.ts     # Path-prefix classification
+│   │   └── AssetQuery.ts        # Query/filter/search API
 │   ├── races/
 │   │   └── RaceDefinition.ts   # 5 races + getRaceById()
 │   ├── layers/
@@ -158,7 +171,8 @@ src/
 │
 ├── inventory/
 │   ├── Inventory.ts            # Inventory builder + helpers
-│   └── inventoryStore.ts       # Zustand inventory state
+│   ├── inventoryStore.ts       # Zustand inventory state
+│   └── InventoryPanel.tsx      # Grid thumbnails + category tabs + equip
 │
 ├── save/
 │   └── CharacterSave.ts        # localStorage persistence
@@ -175,11 +189,57 @@ src/
 │   ├── AssetSearch.tsx         # Category + search bar
 │   └── PlayerControls.tsx      # Play/pause/speed/direction
 │
+├── photo/
+│   ├── PhotoMode.ts            # Canvas export + resolution/scale control
+│   ├── PhotoSettings.ts        # Resolution presets, scale modes
+│   └── ScreenshotPreset.ts     # Named capture presets
+│
+├── map/
+│   └── MapDefinition.ts        # Map interface + stubs (Ninia Castle, Hunting)
+│
 ├── stores/
 │   └── sandboxStore.ts         # Generic UI state
 │
 └── effects/
     └── ...                     # Stub (future)
+```
+
+## Character Data Flow
+
+```
+GameAssets/asset.json
+     │
+     ▼
+AssetCatalog.load() → categorizes 46,816 entries by path prefix
+     │
+     ├── AssetCategory — infers category from path (Enemy, Player, Item, Effect…)
+     ├── AssetQuery — filter by category, subCategory, type, search string
+     │
+     ▼
+CharacterCreationFlow (step-based)
+     │  select-race → select-gender → select-body → select-face → select-hair
+     ▼
+CharacterConfig (race + equipment map)
+     │
+     ├── RaceDefinition → available layers, body asset, genders
+     ├── LayerDefinition → zIndex + partSlots for each layer
+     ├── EquipmentSystem → validate race/layer compatibility
+     │
+     ▼
+paperdollStore (Zustand)
+     │
+     ├── CharacterAnimator (single clock, direction mapping)
+     ├── PaperDoll (data-driven sprites, zIndex sorted)
+     │
+     ▼
+PaperDollView (PixiJS canvas)
+     │
+     ▼
+CharacterPanel (React UI)
+     ├── Layer tabs → SlotPicker per layer
+     ├── Inventory tab → InventoryPanel (grid, search, category)
+     ├── Save/Load → CharacterSave (localStorage)
+     └── Presets → built-in + custom
 ```
 
 ## Data Flow

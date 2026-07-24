@@ -64,7 +64,7 @@ complete equipment backpack, photo mode basics
 
 ---
 
-## M3 — Character Studio
+## M3 — Character Studio (In Progress)
 
 **Goal**: Full SGO character creation with race selection, equipment backpack, save/load.
 
@@ -75,6 +75,25 @@ complete equipment backpack, photo mode basics
 - Character save/load (localStorage + export)
 - Photo Mode basics
 ```
+
+### Completed
+- ✅ Data-driven layers (LayerDefinition, zIndex, partSlots)
+- ✅ Race definitions (5 races with genders, bodyAsset, availableLayers)
+- ✅ Equipment system (equip/validate/resolve)
+- ✅ Inventory foundation (all-items sandbox, search, filter)
+- ✅ Save system (localStorage + JSON export/import)
+- ✅ Asset catalog (AssetCatalog, AssetCategory, AssetQuery)
+- ✅ Character creation flow (CharacterCreationFlow, CreationState, CreationOptions)
+- ✅ Inventory panel (grid thumbs, category tabs, equip click)
+- ✅ Photo mode engine (PhotoMode, PhotoSettings, ScreenshotPreset)
+- ✅ Map interface stub (MapDefinition + Ninia Castle / Hunting stubs)
+
+### In Progress / Next
+- ⬜ UI: Integrate CharacterCreationFlow into CharacterPanel
+- ⬜ UI: Photo Mode panel (resolution select, zoom/pan, capture button)
+- ⬜ UI: InventoryPanel wired to main panel
+- ⬜ UI: Map viewer placeholder
+- ⬜ Test: Creation flow unit tests
 
 ---
 
